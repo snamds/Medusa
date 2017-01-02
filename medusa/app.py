@@ -64,6 +64,7 @@ PIDFILE = ''
 
 DAEMON = None
 NO_RESIZE = False
+WEB_SERVER_ONLY = False
 
 # system events
 events = None

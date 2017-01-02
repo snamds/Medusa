@@ -40,6 +40,8 @@ Options:
                          location specified with --datadir
        --noresize        Prevent resizing of the banner/posters even if PIL
                          is installed
+  -w,  --webserver       Run in webserver mode. This will prevent the startup of the
+                         search, update and .. threads.
 """
 
 from __future__ import print_function, unicode_literals
@@ -179,7 +181,8 @@ class Application(object):
         try:
             opts, _ = getopt.getopt(
                 args, 'hqdp::',
-                ['help', 'quiet', 'nolaunch', 'daemon', 'pidfile=', 'port=', 'datadir=', 'config=', 'noresize']
+                ['help', 'quiet', 'nolaunch', 'daemon', 'pidfile=', 'port=', 'datadir=', 'config=', 'noresize',
+                 'webserver']
             )
         except getopt.GetoptError:
             sys.exit(self.help_message())
@@ -236,6 +239,10 @@ class Application(object):
             # Prevent resizing of the banner/posters even if PIL is installed
             if option in ('--noresize',):
                 app.NO_RESIZE = True
+
+            # Prevent resizing of the banner/posters even if PIL is installed
+            if option in ('--webserver',):
+                app.WEB_SERVER_ONLY = True
 
         # Keep backwards compatibility
         Application.backwards_compatibility()
@@ -1031,80 +1038,81 @@ class Application(object):
 
             # initialize schedulers
             # updaters
-            app.version_check_scheduler = scheduler.Scheduler(version_checker.CheckVersion(),
-                                                              cycleTime=datetime.timedelta(hours=app.UPDATE_FREQUENCY),
-                                                              threadName="CHECKVERSION", silent=False)
+            if not app.WEB_SERVER_ONLY:
+                app.version_check_scheduler = scheduler.Scheduler(version_checker.CheckVersion(),
+                                                                  cycleTime=datetime.timedelta(hours=app.UPDATE_FREQUENCY),
+                                                                  threadName="CHECKVERSION", silent=False)
 
-            app.show_queue_scheduler = scheduler.Scheduler(show_queue.ShowQueue(),
-                                                           cycleTime=datetime.timedelta(seconds=3),
-                                                           threadName="SHOWQUEUE")
+                app.show_queue_scheduler = scheduler.Scheduler(show_queue.ShowQueue(),
+                                                               cycleTime=datetime.timedelta(seconds=3),
+                                                               threadName="SHOWQUEUE")
 
-            app.show_update_scheduler = scheduler.Scheduler(show_updater.ShowUpdater(),
-                                                            cycleTime=datetime.timedelta(hours=1),
-                                                            threadName="SHOWUPDATER",
-                                                            start_time=datetime.time(hour=app.SHOWUPDATE_HOUR,
-                                                                                     minute=random.randint(0, 59)))
+                app.show_update_scheduler = scheduler.Scheduler(show_updater.ShowUpdater(),
+                                                                cycleTime=datetime.timedelta(hours=1),
+                                                                threadName="SHOWUPDATER",
+                                                                start_time=datetime.time(hour=app.SHOWUPDATE_HOUR,
+                                                                                         minute=random.randint(0, 59)))
 
-            # snatcher used for manual search, manual picked results
-            app.manual_snatch_scheduler = scheduler.Scheduler(SnatchQueue(),
-                                                              cycleTime=datetime.timedelta(seconds=3),
-                                                              threadName="MANUALSNATCHQUEUE")
-            # searchers
-            app.search_queue_scheduler = scheduler.Scheduler(SearchQueue(),
-                                                             cycleTime=datetime.timedelta(seconds=3),
-                                                             threadName="SEARCHQUEUE")
+                # snatcher used for manual search, manual picked results
+                app.manual_snatch_scheduler = scheduler.Scheduler(SnatchQueue(),
+                                                                  cycleTime=datetime.timedelta(seconds=3),
+                                                                  threadName="MANUALSNATCHQUEUE")
+                # searchers
+                app.search_queue_scheduler = scheduler.Scheduler(SearchQueue(),
+                                                                 cycleTime=datetime.timedelta(seconds=3),
+                                                                 threadName="SEARCHQUEUE")
 
-            app.forced_search_queue_scheduler = scheduler.Scheduler(ForcedSearchQueue(),
-                                                                    cycleTime=datetime.timedelta(seconds=3),
-                                                                    threadName="FORCEDSEARCHQUEUE")
+                app.forced_search_queue_scheduler = scheduler.Scheduler(ForcedSearchQueue(),
+                                                                        cycleTime=datetime.timedelta(seconds=3),
+                                                                        threadName="FORCEDSEARCHQUEUE")
 
-            # TODO: update_interval should take last daily/backlog times into account!
-            update_interval = datetime.timedelta(minutes=app.DAILYSEARCH_FREQUENCY)
-            app.daily_search_scheduler = scheduler.Scheduler(DailySearcher(),
-                                                             cycleTime=update_interval,
-                                                             threadName="DAILYSEARCHER",
-                                                             run_delay=update_interval)
+                # TODO: update_interval should take last daily/backlog times into account!
+                update_interval = datetime.timedelta(minutes=app.DAILYSEARCH_FREQUENCY)
+                app.daily_search_scheduler = scheduler.Scheduler(DailySearcher(),
+                                                                 cycleTime=update_interval,
+                                                                 threadName="DAILYSEARCHER",
+                                                                 run_delay=update_interval)
 
-            update_interval = datetime.timedelta(minutes=app.BACKLOG_FREQUENCY)
-            app.backlog_search_scheduler = BacklogSearchScheduler(BacklogSearcher(),
+                update_interval = datetime.timedelta(minutes=app.BACKLOG_FREQUENCY)
+                app.backlog_search_scheduler = BacklogSearchScheduler(BacklogSearcher(),
+                                                                      cycleTime=update_interval,
+                                                                      threadName="BACKLOG",
+                                                                      run_delay=update_interval)
+
+                search_intervals = {'15m': 15, '45m': 45, '90m': 90, '4h': 4 * 60, 'daily': 24 * 60}
+                if app.CHECK_PROPERS_INTERVAL in search_intervals:
+                    update_interval = datetime.timedelta(minutes=search_intervals[app.CHECK_PROPERS_INTERVAL])
+                    run_at = None
+                else:
+                    update_interval = datetime.timedelta(hours=1)
+                    run_at = datetime.time(hour=1)  # 1 AM
+
+                app.proper_finder_scheduler = scheduler.Scheduler(ProperFinder(),
                                                                   cycleTime=update_interval,
-                                                                  threadName="BACKLOG",
+                                                                  threadName="FINDPROPERS",
+                                                                  start_time=run_at,
                                                                   run_delay=update_interval)
 
-            search_intervals = {'15m': 15, '45m': 45, '90m': 90, '4h': 4 * 60, 'daily': 24 * 60}
-            if app.CHECK_PROPERS_INTERVAL in search_intervals:
-                update_interval = datetime.timedelta(minutes=search_intervals[app.CHECK_PROPERS_INTERVAL])
-                run_at = None
-            else:
-                update_interval = datetime.timedelta(hours=1)
-                run_at = datetime.time(hour=1)  # 1 AM
+                # processors
+                update_interval = datetime.timedelta(minutes=app.AUTOPOSTPROCESSOR_FREQUENCY)
+                app.auto_post_processor_scheduler = scheduler.Scheduler(auto_post_processor.PostProcessor(),
+                                                                        cycleTime=update_interval,
+                                                                        threadName="POSTPROCESSOR",
+                                                                        silent=not app.PROCESS_AUTOMATICALLY,
+                                                                        run_delay=update_interval)
+                update_interval = datetime.timedelta(minutes=5)
+                app.trakt_checker_scheduler = scheduler.Scheduler(trakt_checker.TraktChecker(),
+                                                                  cycleTime=datetime.timedelta(hours=1),
+                                                                  threadName="TRAKTCHECKER",
+                                                                  run_delay=update_interval,
+                                                                  silent=not app.USE_TRAKT)
 
-            app.proper_finder_scheduler = scheduler.Scheduler(ProperFinder(),
-                                                              cycleTime=update_interval,
-                                                              threadName="FINDPROPERS",
-                                                              start_time=run_at,
-                                                              run_delay=update_interval)
-
-            # processors
-            update_interval = datetime.timedelta(minutes=app.AUTOPOSTPROCESSOR_FREQUENCY)
-            app.auto_post_processor_scheduler = scheduler.Scheduler(auto_post_processor.PostProcessor(),
-                                                                    cycleTime=update_interval,
-                                                                    threadName="POSTPROCESSOR",
-                                                                    silent=not app.PROCESS_AUTOMATICALLY,
-                                                                    run_delay=update_interval)
-            update_interval = datetime.timedelta(minutes=5)
-            app.trakt_checker_scheduler = scheduler.Scheduler(trakt_checker.TraktChecker(),
-                                                              cycleTime=datetime.timedelta(hours=1),
-                                                              threadName="TRAKTCHECKER",
-                                                              run_delay=update_interval,
-                                                              silent=not app.USE_TRAKT)
-
-            update_interval = datetime.timedelta(hours=app.SUBTITLES_FINDER_FREQUENCY)
-            app.subtitles_finder_scheduler = scheduler.Scheduler(subtitles.SubtitlesFinder(),
-                                                                 cycleTime=update_interval,
-                                                                 threadName="FINDSUBTITLES",
-                                                                 run_delay=update_interval,
-                                                                 silent=not app.USE_SUBTITLES)
+                update_interval = datetime.timedelta(hours=app.SUBTITLES_FINDER_FREQUENCY)
+                app.subtitles_finder_scheduler = scheduler.Scheduler(subtitles.SubtitlesFinder(),
+                                                                     cycleTime=update_interval,
+                                                                     threadName="FINDSUBTITLES",
+                                                                     run_delay=update_interval,
+                                                                     silent=not app.USE_SUBTITLES)
 
             app.__INITIALIZED__ = True
             return True
@@ -1159,73 +1167,74 @@ class Application(object):
             # start system events queue
             app.events.start()
 
-            # start the daily search scheduler
-            app.daily_search_scheduler.enable = True
-            app.daily_search_scheduler.start()
+            if not app.WEB_SERVER_ONLY:
+                # start the daily search scheduler
+                app.daily_search_scheduler.enable = True
+                app.daily_search_scheduler.start()
 
-            # start the backlog scheduler
-            app.backlog_search_scheduler.enable = True
-            app.backlog_search_scheduler.start()
+                # start the backlog scheduler
+                app.backlog_search_scheduler.enable = True
+                app.backlog_search_scheduler.start()
 
-            # start the show updater
-            app.show_update_scheduler.enable = True
-            app.show_update_scheduler.start()
+                # start the show updater
+                app.show_update_scheduler.enable = True
+                app.show_update_scheduler.start()
 
-            # start the version checker
-            app.version_check_scheduler.enable = True
-            app.version_check_scheduler.start()
+                # start the version checker
+                app.version_check_scheduler.enable = True
+                app.version_check_scheduler.start()
 
-            # start the queue checker
-            app.show_queue_scheduler.enable = True
-            app.show_queue_scheduler.start()
+                # start the queue checker
+                app.show_queue_scheduler.enable = True
+                app.show_queue_scheduler.start()
 
-            # start the search queue checker
-            app.search_queue_scheduler.enable = True
-            app.search_queue_scheduler.start()
+                # start the search queue checker
+                app.search_queue_scheduler.enable = True
+                app.search_queue_scheduler.start()
 
-            # start the forced search queue checker
-            app.forced_search_queue_scheduler.enable = True
-            app.forced_search_queue_scheduler.start()
+                # start the forced search queue checker
+                app.forced_search_queue_scheduler.enable = True
+                app.forced_search_queue_scheduler.start()
 
-            # start the search queue checker
-            app.manual_snatch_scheduler.enable = True
-            app.manual_snatch_scheduler.start()
+                # start the search queue checker
+                app.manual_snatch_scheduler.enable = True
+                app.manual_snatch_scheduler.start()
 
-            # start the proper finder
-            if app.DOWNLOAD_PROPERS:
-                app.proper_finder_scheduler.silent = False
-                app.proper_finder_scheduler.enable = True
-            else:
-                app.proper_finder_scheduler.enable = False
-                app.proper_finder_scheduler.silent = True
-            app.proper_finder_scheduler.start()
+                # start the proper finder
+                if app.DOWNLOAD_PROPERS:
+                    app.proper_finder_scheduler.silent = False
+                    app.proper_finder_scheduler.enable = True
+                else:
+                    app.proper_finder_scheduler.enable = False
+                    app.proper_finder_scheduler.silent = True
+                app.proper_finder_scheduler.start()
 
-            # start the post processor
-            if app.PROCESS_AUTOMATICALLY:
-                app.auto_post_processor_scheduler.silent = False
-                app.auto_post_processor_scheduler.enable = True
-            else:
-                app.auto_post_processor_scheduler.enable = False
-                app.auto_post_processor_scheduler.silent = True
-            app.auto_post_processor_scheduler.start()
+                # start the post processor
+                if app.PROCESS_AUTOMATICALLY:
+                    app.auto_post_processor_scheduler.silent = False
+                    app.auto_post_processor_scheduler.enable = True
+                else:
+                    app.auto_post_processor_scheduler.enable = False
+                    app.auto_post_processor_scheduler.silent = True
+                app.auto_post_processor_scheduler.start()
 
-            # start the subtitles finder
-            if app.USE_SUBTITLES:
-                app.subtitles_finder_scheduler.silent = False
-                app.subtitles_finder_scheduler.enable = True
-            else:
-                app.subtitles_finder_scheduler.enable = False
-                app.subtitles_finder_scheduler.silent = True
-            app.subtitles_finder_scheduler.start()
+                # start the subtitles finder
+                if app.USE_SUBTITLES:
+                    app.subtitles_finder_scheduler.silent = False
+                    app.subtitles_finder_scheduler.enable = True
+                else:
+                    app.subtitles_finder_scheduler.enable = False
+                    app.subtitles_finder_scheduler.silent = True
+                app.subtitles_finder_scheduler.start()
 
-            # start the trakt checker
-            if app.USE_TRAKT:
-                app.trakt_checker_scheduler.silent = False
-                app.trakt_checker_scheduler.enable = True
-            else:
-                app.trakt_checker_scheduler.enable = False
-                app.trakt_checker_scheduler.silent = True
-            app.trakt_checker_scheduler.start()
+                # start the trakt checker
+                if app.USE_TRAKT:
+                    app.trakt_checker_scheduler.silent = False
+                    app.trakt_checker_scheduler.enable = True
+                else:
+                    app.trakt_checker_scheduler.enable = False
+                    app.trakt_checker_scheduler.silent = True
+                app.trakt_checker_scheduler.start()
 
             app.started = True
 
