@@ -318,7 +318,8 @@ MEDUSA.home.displayShow = function() { // eslint-disable-line max-lines
             columnSelector_saveColumns: true, // eslint-disable-line camelcase
             columnSelector_layout: '<label><input type="checkbox">{name}</label>', // eslint-disable-line camelcase
             columnSelector_mediaquery: false, // eslint-disable-line camelcase
-            columnSelector_cssChecked: 'checked' // eslint-disable-line camelcase
+            columnSelector_cssChecked: 'checked', // eslint-disable-line camelcase
+            stickyHeaders_offset: 95 // jshint ignore:line
         }
     });
 
@@ -326,8 +327,11 @@ MEDUSA.home.displayShow = function() { // eslint-disable-line max-lines
         placement: 'bottom',
         html: true, // required if content has HTML
         content: '<div id="popover-target"></div>'
-    }).on('shown.bs.popover', function() { // bootstrap popover event triggered when the popover opens
-        $.tablesorter.columnSelector.attachTo($('#showTable, #animeTable'), '#popover-target');
+    })
+    .on('shown.bs.popover', function() { // bootstrap popover event triggered when the popover opens
+        $("#showTable, #animeTable").each(function(index, item){
+            $.tablesorter.columnSelector.attachTo(item, '#popover-target');
+        });
     });
 
     // Moved and rewritten this from displayShow. This changes the button when clicked for collapsing/expanding the
