@@ -667,7 +667,7 @@ class Series(TV):
         absolute_number = try_int(absolute_number, None)
 
         # if we get an anime get the real season and episode
-        if not season and not episode:
+        if season is None and episode is None:
             main_db_con = db.DBConnection()
             sql = None
             sql_args = None
