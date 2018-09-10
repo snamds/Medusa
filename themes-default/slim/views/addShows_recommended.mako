@@ -1,31 +1,26 @@
 <%inherit file="/layouts/main.mako"/>
-<%!
-    from medusa import app
-%>
 <%block name="scripts">
 % if enable_anime_options:
     <script type="text/javascript" src="js/blackwhite.js?${sbPID}"></script>
 % endif
 <script>
 window.app = {};
-const startVue = () => {
-    window.app = new Vue({
-        el: '#vue-wrap',
-        data() {
-            return {};
-        }
-    });
-};
+window.app = new Vue({
+    store,
+    router,
+    el: '#vue-wrap',
+    data() {
+        return {
+            rootDirs: []
+        };
+    }
+});
 </script>
 </%block>
 <%block name="content">
 <div class="row">
     <div class="col-md-12">
-    % if not header is UNDEFINED:
-        <h1 class="header">${header}</h1>
-    % else:
-        <h1 class="title">${title}</h1>
-    % endif
+        <h1 class="header">{{ $route.meta.header }}</h1>
     </div>
 </div>
 
@@ -46,11 +41,11 @@ const startVue = () => {
                     <div class="field-pair">
                         <label class="clearfix" for="configure_show_options">
                             <ul>
-                                <li><app-link href="addShows/${realpage + '/'}#tabs-1">Manage Directories</app-link></li>
-                                <li><app-link href="addShows/${realpage + '/'}#tabs-2">Customize Options</app-link></li>
+                                <li><app-link href="#tabs-1">Manage Directories</app-link></li>
+                                <li><app-link href="#tabs-2">Customize Options</app-link></li>
                             </ul>
                             <div id="tabs-1" class="existingtabs">
-                                <%include file="/inc_rootDirs.mako"/>
+                                <root-dirs @update="rootDirs = $event"></root-dirs>
                                 <br/>
                             </div>
                             <div id="tabs-2" class="existingtabs">

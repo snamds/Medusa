@@ -21,6 +21,7 @@ from six import itervalues, viewitems
 from tornado.escape import json_decode
 
 log = BraceAdapter(logging.getLogger(__name__))
+log.logger.addHandler(logging.NullHandler())
 
 
 class SeriesHandler(BaseRequestHandler):
@@ -35,7 +36,7 @@ class SeriesHandler(BaseRequestHandler):
     #: allowed HTTP methods
     allowed_methods = ('GET', 'PATCH', 'DELETE', )
 
-    def get(self, series_slug, path_param=None):
+    def http_get(self, series_slug, path_param=None):
         """Query series information.
 
         :param series_slug: series slug. E.g.: tvdb1234
@@ -48,7 +49,11 @@ class SeriesHandler(BaseRequestHandler):
 
         if not series_slug:
             detailed = self._parse_boolean(self.get_argument('detailed', default=False))
-            data = [s.to_json(detailed=detailed) for s in Series.find_series(predicate=filter_series)]
+            fetch = self._parse_boolean(self.get_argument('fetch', default=False))
+            data = [
+                s.to_json(detailed=detailed, fetch=fetch)
+                for s in Series.find_series(predicate=filter_series)
+            ]
             return self._paginate(data, sort='title')
 
         identifier = SeriesIdentifier.from_slug(series_slug)
@@ -60,7 +65,8 @@ class SeriesHandler(BaseRequestHandler):
             return self._not_found('Series not found')
 
         detailed = self._parse_boolean(self.get_argument('detailed', default=True))
-        data = series.to_json(detailed=detailed)
+        fetch = self._parse_boolean(self.get_argument('fetch', default=False))
+        data = series.to_json(detailed=detailed, fetch=fetch)
         if path_param:
             if path_param not in data:
                 return self._bad_request("Invalid path parameter '{0}'".format(path_param))
@@ -68,7 +74,7 @@ class SeriesHandler(BaseRequestHandler):
 
         return self._ok(data)
 
-    def post(self, series_slug=None, path_param=None):
+    def http_post(self, series_slug=None, path_param=None):
         """Add a new series."""
         if series_slug is not None:
             return self._bad_request('Series slug should not be specified')
@@ -95,7 +101,7 @@ class SeriesHandler(BaseRequestHandler):
 
         return self._created(series.to_json(), identifier=identifier.slug)
 
-    def patch(self, series_slug, path_param=None):
+    def http_patch(self, series_slug, path_param=None):
         """Patch series."""
         if not series_slug:
             return self._method_not_allowed('Patching multiple series is not allowed')
@@ -136,6 +142,7 @@ class SeriesHandler(BaseRequestHandler):
             'config.qualities.preferred': ListField(series, 'qualities_preferred'),
             'config.qualities.combined': IntegerField(series, 'quality'),
         }
+
         for key, value in iter_nested_items(data):
             patch_field = patches.get(key)
             if patch_field and patch_field.patch(series, value):
@@ -147,11 +154,11 @@ class SeriesHandler(BaseRequestHandler):
         series.save_to_db()
 
         if ignored:
-            log.warning('Series patch ignored %r', ignored)
+            log.warning('Series patch ignored {items!r}', {'items': ignored})
 
-        self._ok(data=accepted)
+        return self._ok(data=accepted)
 
-    def delete(self, series_slug, path_param=None):
+    def http_delete(self, series_slug, path_param=None):
         """Delete the series."""
         if not series_slug:
             return self._method_not_allowed('Deleting multiple series are not allowed')

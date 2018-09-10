@@ -2,19 +2,19 @@
 <%block name="scripts">
 <script>
 window.app = {};
-const startVue = () => {
-    window.app = new Vue({
-        el: '#vue-wrap',
-        metaInfo: {
-            title: '500'
-        },
-        data() {
-            return {
-                header: 'Mako Error'
-            };
-        }
-    });
-};
+window.app = new Vue({
+    store,
+    router,
+    el: '#vue-wrap',
+    metaInfo: {
+        title: '500'
+    },
+    data() {
+        return {
+            header: 'Mako Error'
+        };
+    }
+});
 </script>
 </%block>
 <%block name="content">

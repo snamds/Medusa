@@ -1,0 +1,40 @@
+{
+  "extends": [
+    "config:base"
+  ],
+  "baseBranches": [
+    "develop"
+  ],
+  "ignorePaths": [
+    ".build/**",
+    "themes/**",
+    "ext/**",
+    "lib/**"
+  ],
+  "js": {
+    "labels": ["Update dep (JS)"],
+    "packageRules": [
+      {
+        "packageNames": ["bootstrap"],
+        "allowedVersions": "<4"
+      },
+      {
+        "packageNames": [
+          "vue",
+          "vue-template-compiler",
+          "@vue/test-utils"
+        ],
+        "groupName": "vue-base"
+      }
+    ]
+  },
+  "python": {
+    "labels": ["Update dep (Py)"],
+    "packageRules": [
+      {
+        "packageNames": ["tornado"],
+        "allowedVersions": "<6"
+      }
+    ]
+  }
+}

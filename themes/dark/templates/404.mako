@@ -2,19 +2,19 @@
 <%block name="scripts">
 <script>
 window.app = {};
-const startVue = () => {
-    window.app = new Vue({
-        el: '#vue-wrap',
-        metaInfo: {
-            title: '404'
-        },
-        data() {
-            return {
-                header: 'Oops'
-            };
-        }
-    });
-};
+window.app = new Vue({
+    store,
+    router,
+    el: '#vue-wrap',
+    metaInfo: {
+        title: '404'
+    },
+    data() {
+        return {
+            header: 'Oops'
+        };
+    }
+});
 </script>
 </%block>
 <%block name="content">
